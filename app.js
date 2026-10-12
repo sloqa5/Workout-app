@@ -1,5 +1,5 @@
 /* Lift Log app. Data lives in this browser (localStorage), with JSON backup/restore. */
-const APP_VERSION = "3.0.0";
+const APP_VERSION = "3.1.0";
 
 /* ================= utils ================= */
 const $ = s => document.querySelector(s);
@@ -119,6 +119,8 @@ const recCol = p => p>=85 ? "var(--good)" : p>=50 ? "var(--pr)" : "var(--warn)";
 /* ================= smart coach (offline rules) ================= */
 function insights(){
   const out = []; const s = sessions(); const t = S.settings.weekTarget;
+  const pf = S.profile; const lastBw = S.bw.slice().sort((a,c) => c.date.localeCompare(a.date))[0]; const kg = lastBw ? lastBw.kg : pf?.weight;
+  if(kg) out.push({lvl:"info",text:`Protein target: ${Math.round(kg*1.6)}–${Math.round(kg*2.2)} g a day (1.6–2.2 g per kg).`});
   if(!s.length){ out.push({lvl:"info",text:"Do your first workout and the coach will start spotting stalls, low-volume muscles and weight trends."}); return out; }
   const ws = iso(weekStart(new Date())); const thisWeek = s.filter(x => x.date >= ws).length;
   const since = daysSince(sTs(s[0]));
@@ -161,7 +163,6 @@ function trainingSummary(days){
   lines.push(`\nCurrent routines:`); S.routines.forEach(r => lines.push(`- ${r.name}${r.rotate===false?" (not in rotation)":""}: ${r.items.map(i => `${exName(i.ex)} ${i.sets}×${i.lo}-${i.hi}${i.group?` [superset ${i.group}]`:""}`).join("; ")}`));
   return lines.join("\n");
 }
-const GOAL = "My goals: general health, muscle definition and getting leaner. I train 1 day at home (bodyweight, little equipment) and 1–2 heavy gym days a week, plus walking.";
 function routineFormat(){
   const ids = Object.values(EX).map(e => `${e.id}=${e.name}`).join(", ");
   return `Reply with ONLY a JSON object in this exact format, no other text:
@@ -171,10 +172,11 @@ function routineFormat(){
 - "lo"/"hi" are the rep range (seconds for holds, minutes for cardio). "rest" is seconds. Give two or more consecutive items the same "group" letter (e.g. "A") to make a superset.`;
 }
 const AI_PROMPTS = {
-  checkin: () => `You're my strength coach. ${GOAL}\nReview my last 4 weeks of training below. Tell me in plain language: what's going well, what's lagging (lifts, muscles, consistency, body weight trend), and 3 specific changes for next week. Keep it short and concrete.\n\n${trainingSummary(28)}`,
-  review: () => { const s = sessions()[0]; return `You're my strength coach. ${GOAL}\nReview my most recent workout (${s?s.date:"none"}) in the context of the previous weeks. Point out PRs, anything that looks off (form fatigue, too few reps, rating patterns) and what to do next session. Keep it brief.\n\n${trainingSummary(21)}`; },
-  stall: () => `You're my strength coach. ${GOAL}\nSome of my lifts have stopped progressing. Look at the data below, identify which lifts are stuck, explain the likely reason, and give me a specific plan for each (deload, rep-range change, variation swap, frequency). Be concrete with weights.\n\n${trainingSummary(42)}`,
-  routine: goal => `You're my strength coach. ${GOAL}\nDesign a workout routine for this request: "${goal||"a balanced full-body session"}".\nUse my training history below to pick sensible exercises.\n\n${routineFormat()}\n\nMy recent training:\n${trainingSummary(28)}`
+  checkin: () => `You're my strength coach. ${describeProfile()}\nReview my last 4 weeks of training below. Tell me in plain language: what's going well, what's lagging (lifts, muscles, consistency, body weight trend), and 3 specific changes for next week. Keep it short and concrete.\n\n${trainingSummary(28)}`,
+  review: () => { const s = sessions()[0]; return `You're my strength coach. ${describeProfile()}\nReview my most recent workout (${s?s.date:"none"}) in the context of the previous weeks. Point out PRs, anything that looks off (form fatigue, too few reps, rating patterns) and what to do next session. Keep it brief.\n\n${trainingSummary(21)}`; },
+  stall: () => `You're my strength coach. ${describeProfile()}\nSome of my lifts have stopped progressing. Look at the data below, identify which lifts are stuck, explain the likely reason, and give me a specific plan for each (deload, rep-range change, variation swap, frequency). Be concrete with weights.\n\n${trainingSummary(42)}`,
+  plan: () => `You're my strength coach. ${describeProfile()}\nDesign my full weekly training plan: one routine per training day, in the order I should do them. Match each day to where I train (gym or home equipment) and keep each session within my time.\n\nReply with ONLY a JSON object {"routines":[ ...one routine object per day... ]} where each routine uses this format:\n${routineFormat()}\n\nMy recent training (may be empty):\n${trainingSummary(28)}`,
+  routine: goal => `You're my strength coach. ${describeProfile()}\nDesign a workout routine for this request: "${goal||"a balanced full-body session"}".\nUse my training history below to pick sensible exercises.\n\n${routineFormat()}\n\nMy recent training:\n${trainingSummary(28)}`
 };
 async function copyText(text){
   try{ await navigator.clipboard.writeText(text); return true; }catch(e){ return false; }
@@ -191,18 +193,19 @@ function renderHome(){
   } else { const r = nextRoutine();
     if(!r) hero = `<div class="hero"><h2>No routines</h2><button class="btn" data-go="routines">Create a routine</button></div>`;
     else { const n = s.filter(x => x.date >= iso(ws)).length; const rec = recovery(); const tired = [...new Set(r.items.map(i => EX[i.ex]?.m[0]).filter(m => m && rec[m] < 50))];
-      hero = `<div class="hero"><div class="label">Up next · ${n} of ${S.settings.weekTarget} this week</div><h2>${esc(r.name)}${r.sub?": "+esc(r.sub):""}</h2>
+      hero = `<div class="hero"><div class="label">${S.profile?.name?`Hi ${esc(S.profile.name)} · `:""}Up next · ${n} of ${S.settings.weekTarget} this week</div><h2>${esc(r.name)}${r.sub?": "+esc(r.sub):""}</h2>
         <ul>${r.items.map(i => `<li><span>${esc(exName(i.ex))}${i.group?` <span class="label" style="color:inherit">SS ${esc(i.group)}</span>`:""}</span><span>${i.sets} × ${i.lo}–${i.hi}${EX[i.ex]?.type==="t"?"s":EX[i.ex]?.type==="min"?" min":""}</span></li>`).join("")}</ul>
         ${tired.length?`<p class="small">Heads up: ${tired.join(", ")} still recovering. Go a bit lighter or pick another routine.</p>`:""}
         <button class="btn" data-start="${esc(r.id)}">Start ${esc(r.name)}</button>
         <div class="chips">${S.routines.filter(x => x.id!==r.id).slice(0,4).map(x => `<button class="chip" data-start="${esc(x.id)}">Do ${esc(x.name)} instead</button>`).join("")}<button class="chip" data-start="__empty">Empty workout</button></div></div>`; } }
   const rec = recovery(); const ins = insights(); const b = S.bw.slice().sort((a,c) => a.date.localeCompare(c.date));
-  el.innerHTML = `<div class="week" aria-label="This week">${week}</div>${hero}
+  const setup = !S.profile ? `<div class="card"><h3>Set up your coach</h3><p class="small muted" style="margin:4px 0 10px">Answer 10 quick questions about your goal, schedule, equipment and any injuries. The coach builds a plan around them.</p><button class="btn sm" data-setup="1">Start setup</button></div>` : "";
+  el.innerHTML = `<div class="week" aria-label="This week">${week}</div>${setup}${hero}
     <div class="card"><div class="between" style="margin-bottom:4px"><h3>Coach</h3><span class="label">Updates after each workout</span></div>
       ${ins.map(i => `<div class="insight"><span class="dot" style="background:${i.lvl==="good"?"var(--good)":i.lvl==="warn"?"var(--warn)":"var(--accent)"}"></span><span>${esc(i.text)}</span></div>`).join("")}</div>
     <div class="card"><div class="between"><h3>Ask Claude</h3><span class="label">AI coach</span></div>
       <p class="small muted" style="margin:4px 0 10px">Copies your training data with a ready-made prompt. Paste it into Claude for a deeper review or a new routine.</p>
-      <div class="chips"><button class="chip" data-ai="checkin">Weekly check-in</button><button class="chip" data-ai="review">Review last workout</button><button class="chip" data-ai="stall">Fix stalled lifts</button><button class="chip" data-ai="routine">Design a routine</button><button class="chip" data-ai="import">Paste routine from Claude</button></div></div>
+      <div class="chips"><button class="chip" data-ai="checkin">Weekly check-in</button><button class="chip" data-ai="review">Review last workout</button><button class="chip" data-ai="stall">Fix stalled lifts</button><button class="chip" data-ai="plan">Design my whole plan</button><button class="chip" data-ai="routine">Design a routine</button><button class="chip" data-ai="import">Paste routine from Claude</button></div></div>
     <div class="card"><div class="between" style="margin-bottom:10px"><h3>Muscle recovery</h3><span class="label">100% = rested</span></div>
       <div class="rec">${BODY.map(m => `<div class="m"><div class="between"><span>${m}</span><span>${Math.round(rec[m])}%</span></div><div class="bar"><i style="width:${rec[m]}%;background:${recCol(rec[m])}"></i></div></div>`).join("")}</div></div>
     <div class="card"><div class="between"><h3>Body weight</h3><div class="row"><input type="number" id="bwInput" step="0.1" min="30" max="300" placeholder="kg" style="width:84px" aria-label="Body weight in kg"><button class="btn sm" id="bwBtn">Log</button></div></div>
@@ -212,6 +215,7 @@ $("#tab-home").addEventListener("click", e => {
   const st = e.target.closest("[data-start]"); if(st){ startWorkout(st.dataset.start); return; }
   const g = e.target.closest("[data-go]"); if(g){ showTab(g.dataset.go); return; }
   const ai = e.target.closest("[data-ai]"); if(ai){ openAI(ai.dataset.ai); return; }
+  if(e.target.closest("[data-setup]")){ openOnboarding(false); return; }
   if(e.target.id === "bwBtn"){ const v = parseFloat($("#bwInput").value); if(!(v>30 && v<300)){ toast("Enter your weight in kg, e.g. 82.4"); return; }
     const d = todayStr(); S.bw = S.bw.filter(x => x.date !== d); S.bw.push({date:d,kg:v}); save(); renderHome(); renderProgress(); toast("Weight logged"); }
 });
@@ -219,14 +223,14 @@ $("#tab-home").addEventListener("click", e => {
 /* ================= AI sheet ================= */
 function openAI(kind){
   if(kind === "import"){ openImport(); return; }
-  const titles = {checkin:"Weekly check-in",review:"Review last workout",stall:"Fix stalled lifts",routine:"Design a routine"};
+  const titles = {checkin:"Weekly check-in",review:"Review last workout",stall:"Fix stalled lifts",routine:"Design a routine",plan:"Design my plan with Claude"};
   sheet(`<div class="sheethead"><h2>${titles[kind]}</h2><button class="btn sm ghost" data-close>Close</button></div>
     ${kind==="routine"?`<label class="small" for="aiGoal">What do you want?</label><input type="text" id="aiGoal" class="full" placeholder="e.g. 45-min upper body, dumbbells only">`:""}
-    <p class="small muted">Tap Copy, open Claude, paste and send. ${kind==="routine"?"Then copy Claude's reply and use <b>Paste routine from Claude</b> to load it.":"Claude's answer stays in that chat."}</p>
+    <p class="small muted">Tap Copy, open Claude, paste and send. ${kind==="routine"||kind==="plan"?"Then copy Claude's whole reply and tap <b>I have Claude's reply</b> below to load it.":"Claude's answer stays in that chat."}</p>
     <button class="btn block" id="aiCopy">Copy prompt + my data</button>
     <a class="btn ghost block" style="text-align:center;text-decoration:none;display:block" href="https://claude.ai/new" target="_blank" rel="noopener">Open Claude</a>
     <textarea id="aiText" readonly aria-label="Prompt text" hidden></textarea>
-    ${kind==="routine"?`<button class="btn ghost block" data-ai2="import">I have Claude's reply: paste routine</button>`:""}`);
+    ${kind==="routine"||kind==="plan"?`<button class="btn ghost block" data-ai2="import">I have Claude's reply: paste it</button>`:""}`);
   $("#aiCopy").onclick = async () => { const text = AI_PROMPTS[kind]($("#aiGoal")?.value.trim());
     if(await copyText(text)) toast("Copied. Paste it into Claude.");
     else { const ta = $("#aiText"); ta.hidden = false; ta.value = text; ta.focus(); ta.select(); toast("Select all and copy the text below."); } };
@@ -244,7 +248,7 @@ function importRoutines(text){
   const starts = ["{","["].map(c => t.indexOf(c)).filter(i => i >= 0); if(!starts.length) throw new Error("No routine found in that text."); const a = Math.min(...starts);
   const end = Math.max(t.lastIndexOf("}"), t.lastIndexOf("]")); const data = JSON.parse(t.slice(a, end+1));
   const list = Array.isArray(data) ? data : Array.isArray(data.routines) ? data.routines : [data];
-  let added = 0;
+  let added = 0; const isPlan = list.length > 1; const newOnes = [];
   for(const r of list){ if(!r || !Array.isArray(r.items) || !r.items.length) continue;
     const items = [];
     for(const it of r.items){ let id = it.ex;
@@ -252,8 +256,9 @@ function importRoutines(text){
         if(found) id = found.id; else { id = "c_" + slug(nm); if(!EX[id]){ const mus = MUSCLES.includes(it.muscle) ? it.muscle : "Core"; S.custom[id] = {id,name:nm,type:["w","bw","t","min"].includes(it.type)?it.type:"w",eq:"machine",inc:2.5,m:[mus],cue:it.cue||""}; mergeCustom(); } } }
       items.push({ex:id, sets:clampInt(it.sets,1,10,3), lo:clampInt(it.lo,1,600,8), hi:clampInt(it.hi,1,600,12), rest:it.rest?clampInt(it.rest,15,600,90):null, group:it.group?String(it.group).slice(0,2).toUpperCase():null}); }
     if(!items.length) continue; items.forEach(i => { if(i.hi < i.lo) i.hi = i.lo; });
-    S.routines.push({id:uid("r"), name:String(r.name||"Claude routine").slice(0,40), sub:String(r.sub||"").slice(0,60), items, rotate:false}); added++; }
+    newOnes.push({id:uid("r"), name:String(r.name||"Claude routine").slice(0,40), sub:String(r.sub||"").slice(0,60), items, rotate:isPlan}); added++; }
   if(!added) throw new Error("No exercises found in that routine.");
+  if(isPlan){ S.routines.forEach(r => r.rotate = false); S.routines = [...newOnes, ...S.routines]; } else S.routines.push(...newOnes);
   save(); return added;
 }
 function clampInt(v, lo, hi, d){ v = parseInt(v,10); return Number.isFinite(v) ? Math.min(hi, Math.max(lo, v)) : d; }
@@ -672,6 +677,7 @@ function openSettings(){
       <div class="setting"><label for="setRestSmall">Rest after other exercises (sec)</label><input type="number" id="setRestSmall" step="15" min="15" max="600" value="${st.restSmall}"></div>
       <div class="setting"><label for="setSound">Rest timer beep</label><select id="setSound"><option value="1" ${+st.sound?"selected":""}>On</option><option value="0" ${+st.sound?"":"selected"}>Off</option></select></div>
       <div class="setting"><label for="setTheme">Theme</label><select id="setTheme">${["system","light","dark"].map(t => `<option value="${t}" ${st.theme===t?"selected":""}>${t[0].toUpperCase()+t.slice(1)}</option>`).join("")}</select></div></div>
+    <div class="card stack"><h3>Your coach profile</h3><p class="small muted">${S.profile ? esc(describeProfile()) : "Not set up yet."}</p><button class="btn sm ghost" id="redoSetup">${S.profile?"Retake questionnaire and rebuild plan":"Start setup questionnaire"}</button></div>
     <div class="card stack"><h3>Your data</h3><p class="small muted">Everything is stored on this phone. Export a backup now and then, and to move to a new phone.</p>
       <div class="row"><button class="btn sm" id="expJson">Export backup</button><button class="btn sm ghost" id="expCsv">Export spreadsheet (CSV)</button></div>
       <label class="btn sm ghost" style="text-align:center">Restore from backup<input type="file" id="impFile" accept="application/json,.json" hidden></label>
@@ -693,6 +699,7 @@ function openSettings(){
   const rb = $("#resetBtn"); if(rb) rb.onclick = () => { resetConfirm = true; openSettings(); };
   const ry = $("#resetYes"); if(ry) ry.onclick = () => { resetConfirm = false; S = freshState(); save(); applyTheme(); closeSheet(); renderAll(); toast("All data erased"); };
   const rn = $("#resetNo"); if(rn) rn.onclick = () => { resetConfirm = false; openSettings(); };
+  $("#redoSetup").onclick = () => openOnboarding(false);
   $("#checkUpd").onclick = async () => { if(!swReg){ toast("Updates work once the app is installed from the website."); return; } try{ await swReg.update(); toast(swReg.waiting ? "Update found" : "You're on the latest version"); }catch(e){ toast("Couldn't check. Are you online?"); } };
 }
 $("#settingsBtn").addEventListener("click", () => { resetConfirm = false; openSettings(); });
@@ -706,6 +713,7 @@ renderAll();
 let startTab = "home"; try{ startTab = new URLSearchParams(location.search).get("tab") || localStorage.getItem("liftlog.tab") || "home"; }catch(e){}
 showTab(S.active ? "workout" : (TABS.includes(startTab) ? startTab : "home"));
 if(S.active) keepAwake();
+if(!S.profile && !S.onboardSkipped && !S.active) openOnboarding(true);
 setInterval(() => { if(!$("#tab-home").hidden && $("#sheet").hidden && !document.activeElement?.matches("input,textarea,select")) renderHome(); }, 60000);
 
 /* ================= PWA: service worker + updates ================= */

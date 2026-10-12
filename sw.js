@@ -1,8 +1,8 @@
 /* Lift Log service worker.
    App files: network-first (so updates arrive as soon as you're online), cached copy when offline.
    Fonts: cache-first. Bump VERSION on every release so phones pick up the new build. */
-const VERSION = "liftlog-3.0.0";
-const CORE = ["./", "index.html", "styles.css", "app.js", "data.js", "manifest.webmanifest", "icons/icon-192.png", "icons/icon-512.png", "icons/apple-touch-icon.png"];
+const VERSION = "liftlog-3.1.0";
+const CORE = ["./", "index.html", "styles.css", "app.js", "data.js", "coach.js", "manifest.webmanifest", "icons/icon-192.png", "icons/icon-512.png", "icons/apple-touch-icon.png"];
 
 self.addEventListener("install", e => {
   e.waitUntil(caches.open(VERSION).then(c => c.addAll(CORE)));
