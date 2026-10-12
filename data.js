@@ -1,0 +1,170 @@
+/* Lift Log – exercise library and default routines.
+   Row format: [id, name, type, equipment, increment kg, "Primary,Secondary", cue, big?]
+   type: w = weight + reps, bw = bodyweight reps, t = hold in seconds, min = cardio minutes (+ optional km)
+   equipment: bar, db, machine, cable, bw, kb, band, cardio */
+const MUSCLES = ["Chest","Shoulders","Back","Biceps","Triceps","Quads","Hamstrings","Glutes","Calves","Core"];
+const EQUIP = {bar:"Barbell",db:"Dumbbell",machine:"Machine",cable:"Cable",bw:"Bodyweight",kb:"Kettlebell",band:"Band",cardio:"Cardio"};
+
+const EX_ROWS = [
+  // ---- Barbell
+  ["squat","Back squat","w","bar",5,"Quads,Glutes,Core","Brace, sit between your hips, knees track over toes.",1],
+  ["frontsq","Front squat","w","bar",2.5,"Quads,Core","Elbows high, stay upright, sit straight down.",1],
+  ["boxsq","Box squat","w","bar",5,"Quads,Glutes","Sit back to a box just below parallel, pause, drive up."],
+  ["bench","Bench press","w","bar",2.5,"Chest,Triceps,Shoulders","Shoulder blades pinched, bar to lower chest, feet planted.",1],
+  ["incbar","Incline bench press","w","bar",2.5,"Chest,Shoulders,Triceps","Bench at ~30°, bar to upper chest."],
+  ["closegrip","Close-grip bench press","w","bar",2.5,"Triceps,Chest","Hands shoulder-width, elbows tucked."],
+  ["ohp","Overhead press","w","bar",2.5,"Shoulders,Triceps","Glutes tight, press straight up, head through at the top.",1],
+  ["pushpress","Push press","w","bar",2.5,"Shoulders,Triceps,Quads","Small knee dip, drive the bar up with your legs."],
+  ["deadlift","Deadlift","w","bar",5,"Hamstrings,Glutes,Back","Bar over mid-foot, flat back, push the floor away.",1],
+  ["sumodl","Sumo deadlift","w","bar",5,"Glutes,Quads,Hamstrings","Wide stance, hands inside knees, chest up.",1],
+  ["trapbar","Trap bar deadlift","w","bar",5,"Quads,Glutes,Back","Stand in the middle, chest up, stand tall.",1],
+  ["rdl","Romanian deadlift","w","bar",5,"Hamstrings,Glutes","Push hips back, soft knees, bar slides down thighs."],
+  ["goodmorning","Good morning","w","bar",2.5,"Hamstrings,Glutes,Back","Bar on back, hinge until torso near parallel."],
+  ["bbrow","Barbell row","w","bar",2.5,"Back,Biceps","Hinge to ~45°, pull the bar to your belly button."],
+  ["pendlay","Pendlay row","w","bar",2.5,"Back,Biceps","Torso flat, each rep starts from the floor."],
+  ["hipthrust","Barbell hip thrust","w","bar",5,"Glutes,Hamstrings","Upper back on bench, chin tucked, squeeze 1s at the top."],
+  ["bbcurl","Barbell curl","w","bar",2.5,"Biceps","Elbows pinned to your sides, no swinging."],
+  ["skull","EZ-bar skull crusher","w","bar",2.5,"Triceps","Lower the bar to your forehead, elbows pointing up."],
+  ["bbshrug","Barbell shrug","w","bar",5,"Back","Shoulders straight up to ears, pause, lower slowly."],
+  ["uprow","Upright row (wide grip)","w","bar",2.5,"Shoulders,Back","Wide grip, pull to lower chest only."],
+  ["smithsq","Smith machine squat","w","machine",5,"Quads,Glutes","Feet slightly forward, controlled depth."],
+  // ---- Dumbbell
+  ["dbbench","Dumbbell bench press","w","db",2,"Chest,Triceps","Log weight per dumbbell. Lower to chest level."],
+  ["incdb","Incline dumbbell press","w","db",2,"Chest,Shoulders","Bench at ~30°. Log weight per dumbbell."],
+  ["dbfly","Dumbbell fly","w","db",1,"Chest","Slight elbow bend, wide arc, feel the stretch."],
+  ["dbohp","Seated dumbbell press","w","db",2,"Shoulders,Triceps","Log weight per dumbbell, press to just short of lockout."],
+  ["arnold","Arnold press","w","db",2,"Shoulders,Triceps","Start palms facing you, rotate as you press."],
+  ["latraise","Dumbbell lateral raise","w","db",1,"Shoulders","Light weight, lead with elbows. Builds shoulder width."],
+  ["reardb","Rear delt raise","w","db",1,"Shoulders,Back","Hinge forward, raise out to the sides, thumbs down."],
+  ["dbrow","One-arm dumbbell row","w","db",2,"Back,Biceps","Hand and knee on bench, pull to your hip. Reps per arm."],
+  ["dbrdl","Dumbbell Romanian deadlift","w","db",2,"Hamstrings,Glutes","Dumbbells slide down your thighs, hips back."],
+  ["gobletsq","Goblet squat","w","db",2,"Quads,Glutes","One dumbbell at your chest, elbows inside knees."],
+  ["dbbss","Dumbbell Bulgarian split squat","w","db",2,"Quads,Glutes","Back foot on bench. Weight per dumbbell, reps per leg."],
+  ["lunge","Walking lunges","w","db",2,"Quads,Glutes","Reps per leg, weight per dumbbell."],
+  ["dbstep","Dumbbell step-ups","w","db",2,"Quads,Glutes","Box at knee height. Reps per leg."],
+  ["dbcurl","Dumbbell curl","w","db",1,"Biceps","Twist palms up as you curl."],
+  ["hammer","Hammer curl","w","db",1,"Biceps","Palms facing each other, elbows still."],
+  ["incurl","Incline dumbbell curl","w","db",1,"Biceps","Arms hang behind you on an incline bench. Big stretch."],
+  ["ohtri","Overhead triceps extension","w","db",1,"Triceps","One dumbbell held with both hands, lower behind your head."],
+  ["dbkick","Triceps kickback","w","db",1,"Triceps","Upper arm parallel to floor, straighten fully."],
+  ["dbshrug","Dumbbell shrug","w","db",2,"Back","Straight up, hold 1s."],
+  ["pullover","Dumbbell pullover","w","db",2,"Chest,Back","Across a bench, lower behind your head with slightly bent arms."],
+  ["farmer","Farmer's carry","w","db",2,"Core,Back","Heavy dumbbells, walk tall. Log seconds as reps."],
+  ["dbcalf","Dumbbell calf raise","w","db",2,"Calves","Ball of foot on a step, full stretch, pause at top."],
+  // ---- Machine & cable
+  ["legpress","Leg press","w","machine",10,"Quads,Glutes","Lower until hips start to tuck, then drive up."],
+  ["hacksq","Hack squat","w","machine",5,"Quads","Feet mid-plate, deep but controlled."],
+  ["legext","Leg extension","w","machine",5,"Quads","Pause at the top, lower slowly."],
+  ["legcurl","Lying leg curl","w","machine",5,"Hamstrings","Hips pinned down, slow on the way back."],
+  ["seatcurl","Seated leg curl","w","machine",5,"Hamstrings","Lean forward slightly for a bigger stretch."],
+  ["calfmach","Standing calf raise","w","machine",5,"Calves","Full stretch at the bottom, 1s squeeze at top."],
+  ["seatcalf","Seated calf raise","w","machine",5,"Calves","Slow reps, full range."],
+  ["hipabd","Hip abduction machine","w","machine",5,"Glutes","Lean forward slightly, push knees out."],
+  ["hipadd","Hip adduction machine","w","machine",5,"Quads","Controlled squeeze, no bouncing."],
+  ["machpress","Machine chest press","w","machine",5,"Chest,Triceps","Handles at mid-chest, full stretch each rep."],
+  ["pecdeck","Pec deck","w","machine",5,"Chest","Elbows slightly bent, squeeze for 1s."],
+  ["cablefly","Cable fly","w","cable",2.5,"Chest","Step forward, hug a big tree."],
+  ["machshoulder","Machine shoulder press","w","machine",5,"Shoulders,Triceps","Seat so handles start at shoulder height."],
+  ["pulldown","Lat pulldown","w","cable",2.5,"Back,Biceps","Pull elbows down to ribs, chest up."],
+  ["closepull","Close-grip pulldown","w","cable",2.5,"Back,Biceps","V-handle to upper chest."],
+  ["crow","Seated cable row","w","cable",2.5,"Back,Biceps","Chest up, pull elbows to your back pockets."],
+  ["chestrow","Chest-supported row","w","machine",5,"Back,Biceps","Chest on pad, no swinging."],
+  ["tbar","T-bar row","w","machine",5,"Back,Biceps","Chest on pad or hinge, pull to belly."],
+  ["straightarm","Straight-arm pulldown","w","cable",2.5,"Back","Arms straight, sweep the bar to your thighs."],
+  ["facepull","Face pulls","w","cable",2.5,"Shoulders,Back","Rope to forehead, thumbs back. Good for shoulder health."],
+  ["reardelt","Reverse pec deck","w","machine",2.5,"Shoulders,Back","Arms slightly bent, squeeze shoulder blades."],
+  ["cablelat","Cable lateral raise","w","cable",1.25,"Shoulders","Cable behind you, raise to shoulder height."],
+  ["cablecurl","Cable curl","w","cable",2.5,"Biceps","Constant tension, elbows still."],
+  ["pushdown","Triceps pushdown","w","cable",2.5,"Triceps","Elbows pinned, push to full lockout."],
+  ["ropeoh","Overhead rope extension","w","cable",2.5,"Triceps","Face away from the stack, extend overhead."],
+  ["cablecrunch","Cable crunch","w","cable",2.5,"Core","Kneel, round your spine down, hips stay still."],
+  ["pallof","Pallof press","w","cable",1.25,"Core","Press out and resist the twist. Reps per side."],
+  ["glutekick","Cable glute kickback","w","cable",1.25,"Glutes","Kick back and slightly out. Reps per leg."],
+  ["kbswing","Kettlebell swing","w","kb",4,"Glutes,Hamstrings,Core","Snap hips forward, arms are just ropes."],
+  ["kbgoblet","Kettlebell goblet squat","w","kb",4,"Quads,Glutes","Hold by the horns at your chest."],
+  // ---- Bodyweight
+  ["pushup","Push-ups","bw","bw",0,"Chest,Triceps,Shoulders","Full range, chest to floor. Knees or bench if needed."],
+  ["kneepush","Knee push-ups","bw","bw",0,"Chest,Triceps","Straight line from knees to head."],
+  ["inclinepush","Incline push-ups","bw","bw",0,"Chest,Triceps","Hands on a bench or bench-height surface."],
+  ["deficitpush","Deficit push-ups","bw","bw",0,"Chest,Triceps","Hands on books or chairs for extra depth."],
+  ["diamond","Diamond push-ups","bw","bw",0,"Triceps,Chest","Hands together under your chest."],
+  ["pike","Pike push-ups","bw","bw",0,"Shoulders,Triceps","Hips high, head toward the floor."],
+  ["dips","Dips (added kg)","w","bw",2.5,"Chest,Triceps","Lean slightly forward. Log added weight, 0 if none."],
+  ["benchdip","Bench dips","bw","bw",0,"Triceps","Hands on a bench behind you, elbows back."],
+  ["pullup","Pull-ups (added kg)","w","bw",2.5,"Back,Biceps","Log added weight, 0 if bodyweight only."],
+  ["chinup","Chin-ups (added kg)","w","bw",2.5,"Back,Biceps","Palms facing you. Log added weight, 0 if none."],
+  ["negpull","Negative pull-ups","bw","bw",0,"Back,Biceps","Jump to the top, lower over 3–5 seconds."],
+  ["invrow","Table / doorway row","bw","bw",0,"Back,Biceps","Under a sturdy table or towel round a door handle."],
+  ["bagrow","Backpack row","bw","bw",0,"Back,Biceps","Load a backpack with books, hinge forward and row."],
+  ["bss","Bulgarian split squat","bw","bw",0,"Quads,Glutes","Back foot on couch or chair. Reps per leg."],
+  ["stepup","Step-ups","bw","bw",0,"Quads,Glutes","Sturdy chair or step. Reps per leg."],
+  ["airsq","Bodyweight squat","bw","bw",0,"Quads,Glutes","Sit deep, chest up, heels down."],
+  ["jumpsq","Jump squats","bw","bw",0,"Quads,Glutes,Calves","Land softly and go straight into the next rep."],
+  ["revlunge","Reverse lunge","bw","bw",0,"Quads,Glutes","Step back, back knee to just above the floor. Reps per leg."],
+  ["wallsit","Wall sit","t","bw",0,"Quads","Thighs parallel to floor. Log seconds."],
+  ["glute","Single-leg glute bridge","bw","bw",0,"Glutes,Hamstrings","Reps per leg, pause 1s at the top."],
+  ["glutebridge","Glute bridge","bw","bw",0,"Glutes,Hamstrings","Drive through heels, squeeze at the top."],
+  ["nordic","Nordic curl","bw","bw",0,"Hamstrings","Feet anchored, lower yourself as slowly as you can."],
+  ["slrdl","Single-leg RDL","bw","bw",0,"Hamstrings,Glutes","Hold a water bottle or bag for load. Reps per leg."],
+  ["calfraise","Single-leg calf raise","bw","bw",0,"Calves","On a step, full range. Reps per leg."],
+  ["superman","Superman","bw","bw",0,"Back,Glutes","Lift arms and legs, hold 2s."],
+  ["backext","Back extension","bw","bw",0,"Back,Glutes,Hamstrings","Hinge at the hips on the bench, don't over-arch."],
+  ["plank","Plank","t","bw",0,"Core","Squeeze glutes, ribs down. Log seconds."],
+  ["sideplank","Side plank","t","bw",0,"Core","Straight line, hips high. Seconds per side."],
+  ["hollow","Hollow hold","t","bw",0,"Core","Lower back pressed down, arms and legs long."],
+  ["deadbug","Dead bug","bw","bw",0,"Core","Lower back pressed down, slow. Reps per side."],
+  ["birddog","Bird dog","bw","bw",0,"Core,Back","Opposite arm and leg, hold 2s. Reps per side."],
+  ["hangknee","Hanging knee raise","bw","bw",0,"Core","No swinging, curl hips up."],
+  ["legraise","Lying leg raise","bw","bw",0,"Core","Lower back flat, lower legs slowly."],
+  ["crunch","Crunch","bw","bw",0,"Core","Curl your ribs toward your hips, don't pull your neck."],
+  ["russian","Russian twist","bw","bw",0,"Core","Lean back, rotate side to side. Count each side."],
+  ["mountain","Mountain climbers","t","bw",0,"Core,Shoulders","Fast knees, hips level. Log seconds."],
+  ["burpee","Burpees","bw","bw",0,"Quads,Chest,Core","Chest to floor, jump at the top."],
+  ["finisher","Finisher: 10-min EMOM","bw","bw",0,"Core,Quads","Every minute: 5 burpees + 10 mountain climbers. Log rounds finished."],
+  ["bandpull","Band pull-apart","bw","band",0,"Shoulders,Back","Arms straight, pull band to chest."],
+  ["bandrow","Band row","bw","band",0,"Back,Biceps","Anchor the band, pull elbows back."],
+  // ---- Cardio
+  ["walk","Walk / incline walk","min","cardio",0,"Cardio","Brisk pace. Log minutes, km optional."],
+  ["run","Run","min","cardio",0,"Cardio","Conversational pace unless doing intervals."],
+  ["bike","Bike","min","cardio",0,"Cardio","Steady or intervals. Log minutes, km optional."],
+  ["rower","Rowing machine","min","cardio",0,"Cardio","Legs, then lean, then arms."],
+  ["stairs","Stair climber","min","cardio",0,"Cardio","Don't lean on the rails."],
+  ["rope","Jump rope","min","cardio",0,"Cardio","Small hops, relaxed shoulders."]
+];
+const EX = {};
+EX_ROWS.forEach(([id,name,type,eq,inc,m,cue,big])=>{EX[id]={id,name,type,eq,inc,m:m.split(","),cue,big:!!big}});
+
+/* Default routines (editable copies are made on first run) */
+const DEFAULT_ROUTINES = [
+  {id:"gymA",name:"Gym A",sub:"Heavy legs + push",items:[
+    {ex:"squat",sets:4,lo:5,hi:7,alts:["legpress","gobletsq","hacksq"]},
+    {ex:"bench",sets:4,lo:5,hi:7,alts:["dbbench","machpress"]},
+    {ex:"rdl",sets:3,lo:8,hi:10,alts:["legcurl","hipthrust"]},
+    {ex:"crow",sets:3,lo:8,hi:12,alts:["dbrow","chestrow"]},
+    {ex:"latraise",sets:3,lo:12,hi:15,alts:["cablelat"],group:"A"},
+    {ex:"plank",sets:3,lo:30,hi:60,alts:["hangknee"],group:"A"}]},
+  {id:"home",name:"Home",sub:"Bodyweight + cardio",items:[
+    {ex:"pushup",sets:4,lo:8,hi:20,alts:["deficitpush","inclinepush"]},
+    {ex:"bss",sets:3,lo:10,hi:15,alts:["stepup","revlunge"]},
+    {ex:"invrow",sets:3,lo:8,hi:15,alts:["bagrow","bandrow"]},
+    {ex:"pike",sets:3,lo:6,hi:12,alts:[]},
+    {ex:"glute",sets:3,lo:12,hi:15,alts:["glutebridge"],group:"A"},
+    {ex:"deadbug",sets:3,lo:8,hi:12,alts:["plank"],group:"A"},
+    {ex:"finisher",sets:1,lo:8,hi:10,alts:[]}]},
+  {id:"gymB",name:"Gym B",sub:"Heavy pull + press",items:[
+    {ex:"deadlift",sets:3,lo:4,hi:6,alts:["trapbar","rdl"]},
+    {ex:"ohp",sets:4,lo:6,hi:8,alts:["dbohp","machshoulder"]},
+    {ex:"pulldown",sets:3,lo:6,hi:10,alts:["pullup","closepull"]},
+    {ex:"incdb",sets:3,lo:8,hi:12,alts:["incbar"]},
+    {ex:"lunge",sets:3,lo:10,hi:12,alts:["dbstep","legpress"]},
+    {ex:"facepull",sets:3,lo:12,hi:15,alts:["reardelt"],group:"A"},
+    {ex:"hammer",sets:2,lo:10,hi:12,alts:["dbcurl"],group:"A"}]}
+];
+
+/* Smart swap suggestions: same primary muscle, sorted by shared muscles */
+function altsFor(exId){
+  const e=EX[exId]; if(!e) return [];
+  return Object.values(EX).filter(x=>x.id!==exId&&x.m[0]===e.m[0]&&x.type!=="min")
+    .map(x=>({id:x.id,s:x.m.filter(m=>e.m.includes(m)).length}))
+    .sort((a,b)=>b.s-a.s).slice(0,8).map(x=>x.id);
+}
